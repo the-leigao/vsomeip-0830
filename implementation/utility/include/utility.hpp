@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -6,12 +6,11 @@
 #ifndef VSOMEIP_V3_UTILITY_HPP
 #define VSOMEIP_V3_UTILITY_HPP
 
-#include <atomic>
-#include <chrono>
 #include <map>
-#include <memory>
 #include <set>
+#include <memory>
 #include <vector>
+#include <atomic>
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -20,8 +19,6 @@
 
 #include <vsomeip/enumeration_types.hpp>
 #include <vsomeip/message.hpp>
-#include <vsomeip/vsomeip_sec.h>
-
 #include "criticalsection.hpp"
 
 namespace vsomeip_v3 {
@@ -31,17 +28,15 @@ class configuration;
 class utility {
 public:
     static inline bool is_request(std::shared_ptr<message> _message) {
-        return _message ? is_request(_message->get_message_type()) : false;
+        return (_message ? is_request(_message->get_message_type()) : false);
     }
 
     static inline bool is_request(byte_t _type) {
-        return is_request(static_cast<message_type_e>(_type));
+        return (is_request(static_cast<message_type_e>(_type)));
     }
 
     static inline bool is_request(message_type_e _type) {
-        return ((_type < message_type_e::MT_NOTIFICATION)
-                || (_type >= message_type_e::MT_REQUEST_ACK
-                        && _type <= message_type_e::MT_REQUEST_NO_RETURN_ACK));
+        return (_type < message_type_e::MT_NOTIFICATION);
     }
 
     static inline bool is_request_no_return(std::shared_ptr<message> _message) {
@@ -49,7 +44,7 @@ public:
     }
 
     static inline bool is_request_no_return(byte_t _type) {
-        return is_request_no_return(static_cast<message_type_e>(_type));
+        return (is_request_no_return(static_cast<message_type_e>(_type)));
     }
 
     static inline bool is_request_no_return(message_type_e _type) {
@@ -73,8 +68,12 @@ public:
         return _type == message_type_e::MT_ERROR;
     }
 
+    static inline bool is_event(byte_t _data) {
+        return (0x80 & _data) > 0;
+    }
+
     static inline bool is_notification(byte_t _type) {
-        return is_notification(static_cast<message_type_e>(_type));
+        return (is_notification(static_cast<message_type_e>(_type)));
     }
 
     static inline bool is_notification(message_type_e _type) {
@@ -84,27 +83,26 @@ public:
     static uint64_t get_message_size(const byte_t *_data, size_t _size);
     static inline uint64_t get_message_size(std::vector<byte_t> &_data) {
         if (_data.size() > 0) {
-            return get_message_size(&_data[0], _data.size());
+            return (get_message_size(&_data[0], _data.size()));
         }
         return 0;
     }
 
     static uint32_t get_payload_size(const byte_t *_data, uint32_t _size);
 
-    static bool is_routing_manager(const std::string &_network);
-    static void remove_lockfile(const std::string &_network);
+    static bool is_routing_manager(const std::shared_ptr<configuration> &_config);
+    static void remove_lockfile(const std::shared_ptr<configuration> &_config);
     static bool exists(const std::string &_path);
     static bool VSOMEIP_IMPORT_EXPORT is_file(const std::string &_path);
     static bool VSOMEIP_IMPORT_EXPORT is_folder(const std::string &_path);
 
-    static std::string get_base_path(const std::string &_network);
+    static const std::string get_base_path(const std::shared_ptr<configuration> &_config);
 
     static client_t request_client_id(const std::shared_ptr<configuration> &_config,
             const std::string &_name, client_t _client);
-    static void release_client_id(const std::string &_network,
-            client_t _client);
-    static std::set<client_t> get_used_client_ids(const std::string &_network);
-    static void reset_client_ids(const std::string &_network);
+    static void release_client_id(client_t _client);
+    static std::set<client_t> get_used_client_ids();
+    static void reset_client_ids();
 
     static inline bool is_valid_message_type(message_type_e _type) {
         return (_type == message_type_e::MT_REQUEST
@@ -136,49 +134,22 @@ public:
                     && static_cast<std::uint8_t>(_code) <= 0x5E));
     }
 
-    static inline bool compare(const vsomeip_sec_client_t &_lhs,
-            const vsomeip_sec_client_t &_rhs) {
-
-        bool is_equal(false);
-        if (_lhs.client_type == _rhs.client_type) {
-            switch (_lhs.client_type) {
-            case VSOMEIP_CLIENT_INVALID:
-                is_equal = true;
-                break;
-            case VSOMEIP_CLIENT_UDS:
-                is_equal = (_lhs.client.uds_client.user == _rhs.client.uds_client.user
-                     && _lhs.client.uds_client.group == _rhs.client.uds_client.group);
-                break;
-            case VSOMEIP_CLIENT_TCP:
-                is_equal = (_lhs.client.ip_client.ip == _rhs.client.ip_client.ip
-                     && _lhs.client.ip_client.port == _rhs.client.ip_client.port);
-                break;
-            default:
-                break;
-            }
-        }
-        return is_equal;
-    }
-
 private:
-    struct data_t {
-        data_t();
-
-        client_t next_client_;
-        std::map<client_t, std::string> used_clients_;
-#ifdef _WIN32
-        HANDLE lock_handle_;
-#else
-        int lock_fd_;
-#endif
-    };
-
-private:
-    static std::uint16_t get_max_client_number(
-            const std::shared_ptr<configuration> &_config);
+    static std::uint16_t get_max_client_number(const std::shared_ptr<configuration> &_config);
 
     static std::mutex mutex__;
-    static std::map<std::string, data_t> data__; // network --> data
+    static client_t next_client__;
+    static std::map<client_t, std::string> used_clients__;
+#ifdef _WIN32
+    static HANDLE lock_handle__;
+#else
+    static int lock_fd__;
+#endif
+#ifndef VSOMEIP_ENABLE_CONFIGURATION_OVERLAYS
+    static bool is_checked__;
+#else
+    static std::set<std::string> is_checked__;
+#endif
 };
 
 }  // namespace vsomeip_v3
