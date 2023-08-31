@@ -239,7 +239,6 @@ template<typename Protocol>
 bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const byte_t *_data, uint32_t _size) 
 {
     //VSOMEIP_INFO << "server_endpoint_impl,send," << _size;
-
     switch (check_message_size(_data, _size, _target)) 
     {
         case endpoint_impl<Protocol>::cms_ret_e::MSG_WAS_SPLIT:
@@ -254,8 +253,6 @@ bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const by
     }
     if (!prepare_stop_handlers_.empty())
     {
-        //VSOMEIP_INFO << "prepare_stop_handlers_ != empty";
-
         const service_t its_service = VSOMEIP_BYTES_TO_WORD(
                 _data[VSOMEIP_SERVICE_POS_MIN], _data[VSOMEIP_SERVICE_POS_MAX]);
         if (prepare_stop_handlers_.find(its_service) != prepare_stop_handlers_.end()) 
@@ -308,27 +305,17 @@ bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const by
     }
     //VSOMEIP_INFO << "its_debouncing," << its_debouncing.count() * 1000.0 / 1000000000.0 << ",ms";
     //VSOMEIP_INFO << "its_retention," << its_retention.count() * 1000.0 / 1000000000.0 << ",ms";
-    
-    // double millisecond_coefficient = 1000.0 / 1000000000ull;
-    // ulong t1 = 0, t2 = 0, t3 = 0,t4 = 0;
-    // {
-    //     timespec time;
-    //     clock_gettime(CLOCK_MONOTONIC_RAW, &time);
-    //     t1 = time.tv_nsec + (ulong)time.tv_sec * 1000000000ull;
-    // }
     // STEP 4: Check if the passenger enters an empty train
     const std::pair<service_t, method_t> its_identifier = std::make_pair(its_service, its_method);
     if (target_train->passengers_.empty()) 
     {
         target_train->departure_ = its_retention;
-        //VSOMEIP_INFO << "passengers_ is empty,its_retention" << its_retention.count() * 1000.0 / 1000000000.0 << ",ms";
     } 
     else 
     {
         if (target_train->passengers_.end() != target_train->passengers_.find(its_identifier))
         {
             must_depart = true;
-            //VSOMEIP_INFO << "must_depart,passengers_ end != finder its_identifier";
         } 
         else 
         {
@@ -336,7 +323,6 @@ bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const by
             if (target_train->buffer_->size() + _size > endpoint_impl<Protocol>::max_message_size_) 
             {
                 must_depart = true;
-                //VSOMEIP_INFO << "must_depart,log_1";
             }
             else 
             {
@@ -346,7 +332,6 @@ bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const by
                     // train's latest departure would already undershot new
                     // passenger's debounce time
                     must_depart = true;
-                    //VSOMEIP_INFO << "must_depart,log_2";
                 }
                 else 
                 {
@@ -355,7 +340,6 @@ bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const by
                         // train departs earlier as the new passenger's debounce
                         // time allows
                         must_depart = true;
-                        //VSOMEIP_INFO << "must_depart,log_3";
                     } 
                     else 
                     {
@@ -365,7 +349,6 @@ bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const by
                             // train's earliest departure would already exceed
                             // the new passenger's retention time.
                             must_depart = true;
-                            //VSOMEIP_INFO << "must_depart,log_4";
                         } 
                         else 
                         {
@@ -379,26 +362,15 @@ bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const by
             }
         }
     }
-    //VSOMEIP_INFO << "must_depart," << must_depart;
-    // {
-    //     timespec time;
-    //     clock_gettime(CLOCK_MONOTONIC_RAW, &time);
-    //     t2 = time.tv_nsec + (ulong)time.tv_sec * 1000000000ull;
-    // }
     // STEP 8: if necessary, send current buffer and create a new one
     if (must_depart) 
     {
         // STEP 8.1: check if debounce time would be undershot here if the train
         // departs. Block sending until train is allowed to depart.
-        //wait_until_debounce_time_reached(target_train);//直接暴力去除时间延迟,不知道会不会产生影响,2023
+        //wait_until_debounce_time_reached(target_train);
         queue_train(target_queue_iterator, target_train, queue_size_zero_on_entry);
         target_train->departure_ = its_retention;
     }
-    // {
-    //     timespec time;
-    //     clock_gettime(CLOCK_MONOTONIC_RAW, &time);
-    //     t3 = time.tv_nsec + (ulong)time.tv_sec * 1000000000ull;
-    // }
     // STEP 9: insert current message buffer
     target_train->buffer_->insert(target_train->buffer_->end(), _data, _data + _size);
     target_train->passengers_.insert(its_identifier);
@@ -411,14 +383,6 @@ bool server_endpoint_impl<Protocol>::send_intern(endpoint_type _target, const by
     {
         target_train->minimal_max_retention_time_ = its_retention;
     }
-    // {
-    //     timespec time;
-    //     clock_gettime(CLOCK_MONOTONIC_RAW, &time);
-    //     t4 = time.tv_nsec + (ulong)time.tv_sec * 1000000000ull;
-    // }
-    // VSOMEIP_INFO << "t2-t1," << (t2 - t1) * millisecond_coefficient << " ms" << ",must_depart," << must_depart;
-    // VSOMEIP_INFO << "t3-t2," << (t3 - t2) * millisecond_coefficient << " ms" << ",must_depart," << must_depart;
-    // VSOMEIP_INFO << "t4-t3," << (t4 - t3) * millisecond_coefficient << " ms" << ",must_depart," << must_depart;
     // STEP 10: restart timer with current departure time
 #ifndef _WIN32
     target_train->departure_timer_->expires_from_now(target_train->departure_);
@@ -490,6 +454,10 @@ void server_endpoint_impl<Protocol>::send_segments(
 template<typename Protocol>
 void server_endpoint_impl<Protocol>::wait_until_debounce_time_reached(
         const std::shared_ptr<train>& _train) const {
+    //Canceled waiting delay time to increase the sending rate.if the operation may cause other problems,please provide modification suggestions.
+    //Modified By the-leigao
+    //2023/08/31
+
     // const std::chrono::nanoseconds time_since_last_departure =
     //         std::chrono::duration_cast<std::chrono::nanoseconds>(
     //                 std::chrono::steady_clock::now() - _train->last_departure_);
@@ -502,11 +470,11 @@ void server_endpoint_impl<Protocol>::wait_until_debounce_time_reached(
     //     {
     //         delta_dureation = std::chrono::nanoseconds(1000);
     //     }
-    //     //时间等待延迟,2023年
     //     //delta_dureation = std::chrono::nanoseconds(math::min(delta_dureation.count(), 1000));
     //     //VSOMEIP_INFO << "sleep_for," << delta_dureation.count() * 1000.0 / 1000000000.0;
     //     //std::this_thread::sleep_for(delta_dureation);
     // }
+
 }
 
 template<typename Protocol>
